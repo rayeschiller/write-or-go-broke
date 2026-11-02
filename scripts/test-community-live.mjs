@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import {createInterface} from 'node:readline';
+import {ProxyAgent,setGlobalDispatcher} from 'undici';
+if(process.env.HTTPS_PROXY)setGlobalDispatcher(new ProxyAgent(process.env.HTTPS_PROXY));
+console.log('Ready for hidden staging credentials');
+const config=JSON.parse(await new Promise(resolve=>{const r=createInterface({input:process.stdin});r.once('line',v=>{r.close();resolve(v);});}));
+process.env.BLOB_READ_WRITE_TOKEN=config.blob;
+process.env.ADMIN_ACCESS_KEY=config.admin;
+process.env.PARTICIPANT_SESSION_SECRET=config.participant;
+const {put}=await import('@vercel/blob');
+const {getStore,read,documents}=await import('../lib/store.js');
+const {digest,issueParticipant}=await import('../lib/participant-auth.js');
+const {makeInvite,activate,settings}=await import('../lib/participant-store.js');
+const {issueSession}=await import('../lib/admin-auth.js');
+const {localDate}=await import('../lib/challenge.js');
+const {default:handler}=await import('../api/participant.js');
+const {default:photo}=await import('../api/photo.js');
+const opts={access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json'};
+const today=localDate(new Date(),'America/Los_Angeles');
+await put('challenge/founding-cohort.json',JSON.stringify({startDate:today,timezone:'America/Los_Angeles'}),opts);
+const run=Date.now();const actors=[];
+for(let i=0;i<2;i++){
+ const email=`test-${run}-${i}@example.invalid`;await getStore().add({name:'Integration '+i,email,phone:'+1202555010'+i,sms:false});
+ const id=digest(email);const payment=await getStore().setPayment(id,true,null);await getStore().setEnrollment(id,true,payment.paymentVersion);
+ const invite=await makeInvite(id);const account=await activate(id,invite.token,'Test-only-password-'+run);actors.push({id,email,cookie:'__Host-wogb_participant='+issueParticipant(id,account.version)});
+}
+async function call(fn,actor,data,query=''){
+ let result={headers:{}};const req={method:data?'POST':'GET',url:'/api/participant'+query,headers:{host:'test.example',origin:'https://test.example','content-type':'application/json',cookie:actor?.cookie||''},body:data};
+ const res={setHeader(k,v){result.headers[k]=v;},status(n){result.status=n;return this;},json(v){result.data=v;return this;},send(v){result.data=v;return this;}};
+ await fn(req,res);return result;
+}
+const admin={cookie:'__Host-wogb_admin='+issueSession()};const [a,b]=actors;
+assert.equal((await call(handler,null,null,'?action=community')).status,401);
+let result=await call(handler,a,{action:'checkin',wrote:true,content:{text:'Private test note',shared:false}});assert.equal(result.status,200,JSON.stringify(result.data));
+assert.equal((await call(handler,b,null,'?action=community')).data.posts.some(p=>p.text==='Private test note'),false);
+result=await call(handler,a,{action:'checkin',wrote:true,content:{text:'Shared test note',shared:true}});assert.equal(result.data.checkin.alreadyCompleted,true);
+let board=(await call(handler,b,null,'?action=community')).data;assert(board.posts.some(p=>p.text==='Shared test note'));assert(!JSON.stringify(board).includes(a.email));assert(!JSON.stringify(board).includes('+1202555'));
+const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a38sAAAAASUVORK5CYII=';
+result=await call(photo,a,{image});assert.equal(result.status,200,JSON.stringify(result.data));const photoId=result.data.id;
+assert.equal((await call(photo,b,null,'?id='+photoId)).status,404);
+result=await call(handler,a,{action:'checkin',wrote:true,content:{text:'',photoId,shared:true}});assert.equal(result.status,200);
+assert.equal((await call(photo,b,null,'?id='+photoId)).status,200);
+result=await call(handler,a,{action:'preferences',email:true,sms:false});assert.equal(result.status,200);
+let editor=await call(handler,admin,null,'?action=admin-checkins&id='+a.id);assert.equal(editor.status,200);let day=editor.data.dates.find(d=>d.date===today);assert.equal(day.completed,true);
+assert.equal((await call(handler,b,{action:'admin-checkin',id:a.id,date:today,completed:false,expectedVersion:day.version,reason:'Test unauthorized'})).status,401);
+result=await call(handler,admin,{action:'admin-checkin',id:a.id,date:today,completed:false,expectedVersion:day.version,reason:'Integration test correction'});assert.equal(result.status,200,JSON.stringify(result.data));
+assert.equal((await call(photo,b,null,'?id='+photoId)).status,404);
+board=(await call(handler,a,null,'?action=community')).data;assert.equal(board.records.find(p=>p.id===board.me).todayCompleted,false);assert.equal(board.posts.some(p=>p.photo?.includes(photoId)),false);
+assert.equal((await call(handler,admin,{action:'admin-checkin',id:a.id,date:today,completed:true,expectedVersion:day.version,reason:'Stale test'})).status,409);
+day=result.data.dates.find(d=>d.date===today);result=await call(handler,admin,{action:'admin-checkin',id:a.id,date:today,completed:true,expectedVersion:day.version,reason:'Restore test check-in'});assert.equal(result.status,200);
+board=(await call(handler,a,null,'?action=community')).data;assert.equal(board.records.find(p=>p.id===board.me).written,1);
+assert.equal((await call(handler,admin,{action:'admin-payout',id:a.id,amountCents:15000,sent:true,expectedVersion:null})).status,422);
+console.log('PASS: real private cloud storage, account activation, private/shared notes, photo upload/access, duplicate check-in, preferences, admin authorization/correction/stale-write protection, scoreboard, payout lock.');
