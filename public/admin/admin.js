@@ -1,4 +1,12 @@
 const $=selector=>document.querySelector(selector);
+const nextRound=new URLSearchParams(location.search).get('cohort')==='november-2026';
+if(nextRound){
+  $('#admin-cohort-label').textContent='NOVEMBER COHORT / ADMIN';
+  $('#enrolled-cohort').textContent='November cohort';
+  $('#payment-total-label').textContent='STAKE CONFIRMED';
+  $('#schedule-form').hidden=true;
+  $('#payment-note').textContent='Confirm a $150 Venmo payment or a $150 rollover you’ve reconciled separately, then enroll the writer. Check the founding payout before recording a rollover. These entries only track the November stake.';
+}
 let signups=[],filter='all',loading=false,scheduleVersion=null;
 const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(value);
 function date(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?'':d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
@@ -6,7 +14,8 @@ function phone(value){return String(value).replace(/^\+1(\d{3})(\d{3})(\d{4})$/,
 function node(tag,text,className){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;}
 function message(selector,text,error=false){const el=$(selector);el.textContent=text;el.className=text?(error?'status-error':'status-ok'):'';}
 async function api(path,options={}){
-  const response=await fetch(path,{...options,credentials:'same-origin',cache:'no-store'});
+  const scoped=nextRound&&path!=='/api/admin-session';
+  const response=await fetch(scoped?path+(path.includes('?')?'&':'?')+'cohort=november-2026':path,{...options,credentials:'same-origin',cache:'no-store'});
   let data;try{data=await response.json();}catch{throw Error('Unexpected response. Please refresh and try again.');}
   if(response.status===401 && path!=='/api/admin-session'){showLogin();throw Error('Please sign in again.');}
   if(!response.ok)throw Error(data.error||'Could not complete that request. Try again.');
@@ -15,7 +24,7 @@ async function api(path,options={}){
 function showLogin(){signups=[];$('#roster').replaceChildren();$('#dashboard').hidden=true;$('#login').hidden=false;$('#logout').hidden=true;}
 function render(){
   const paid=signups.filter(s=>s.paid).length;
-  $('#total').textContent=signups.length;$('#received').textContent=money(paid*150);$('#paid-count').textContent=paid+' '+(paid===1?'person paid':'people paid');$('#unpaid').textContent=signups.length-paid;$('#enrolled-count').textContent=signups.filter(s=>s.enrolled).length;
+  $('#total').textContent=signups.length;$('#received').textContent=money(paid*150);$('#paid-count').textContent=paid+' '+(paid===1?'stake confirmed':'stakes confirmed');$('#unpaid').textContent=signups.length-paid;$('#enrolled-count').textContent=signups.filter(s=>s.enrolled).length;
   const query=$('#search').value.trim().toLowerCase();
   const rows=signups.filter(s=>(filter==='all'||(filter==='enrolled'?s.enrolled:filter==='paid'?s.paid:!s.paid))&&(!query||[s.name,s.email,s.phone,phone(s.phone)].some(v=>String(v||'').toLowerCase().includes(query))));
   $('#result-count').textContent=rows.length+' of '+signups.length+' signups';
@@ -26,23 +35,29 @@ function render(){
     const contact=node('div');contact.append(node('h2',person.name));const links=node('div',undefined,'contact');
     const email=node('a',person.email);email.href='mailto:'+person.email;
     const tel=node('a',phone(person.phone));tel.href='tel:'+person.phone;links.append(email,tel);contact.append(links);
-    const joined=node('div');joined.append(node('span','SIGNED UP','row-label'),node('span',date(person.createdAt),'signup-date'));
-    const payment=node('div');payment.append(node('span','VENMO STATUS','row-label'),node('span',person.paid?'$150 RECEIVED':'NOT RECEIVED','badge'+(person.paid?' paid':'')));
+    const joined=node('div');joined.append(node('span',person.source==='returning'?'RETURNING WRITER':'SIGNED UP','row-label'),node('span',date(person.createdAt),'signup-date'));
+    const payment=node('div');payment.append(node('span','VENMO STATUS','row-label'),node('span',person.paid?(person.method==='rollover'?'$150 ROLLOVER':'$150 RECEIVED'):'NOT RECEIVED','badge'+(person.paid?' paid':'')));
     if(person.paidAt)payment.append(node('div','Marked '+date(person.paidAt),'payment-date'));
     payment.append(node('span',person.enrolled?'CHALLENGE: ENROLLED':person.paid?'READY TO ENROLL':'NOT ENROLLED','badge enrollment'+(person.enrolled?' paid':'')));
     if(person.enrolledAt)payment.append(node('div','Enrolled '+date(person.enrolledAt),'payment-date'));
     if(person.enrolled)payment.append(node('div',(person.completedDays||0)+' / 30 days written'+(person.lastCheckin?' · Latest '+person.lastCheckin:''),'payment-date'));
     const action=node('div');const button=node('button',person.paid?'Undo payment mark':'Mark $150 received','payment-action'+(person.paid?' undo':''));
     button.type='button';button.setAttribute('aria-label',(person.paid?'Undo payment for ':'Mark $150 Venmo received from ')+person.name);
-    button.addEventListener('click',async()=>{
+    const funding=async method=>{
+      if(method==='rollover'&&!window.confirm('Confirm that you reconciled $150 from this writer’s founding cohort payout.'))return;
       for(const control of action.querySelectorAll('button'))control.disabled=true;row.classList.add('pending');button.textContent='Saving…';message('#dashboard-status','');
       try{
-        const result=await api('/api/admin-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,paid:!person.paid,expectedVersion:person.paymentVersion})});
-        Object.assign(person,{paid:result.payment.paid,paidAt:result.payment.paidAt,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
-        render();message('#dashboard-status',person.paid?'Marked $150 Venmo received from '+person.name+'.':'Payment mark removed for '+person.name+'. Challenge enrollment is also cleared.');
+        const result=await api('/api/admin-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,paid:!person.paid,expectedVersion:person.paymentVersion,...(nextRound?{method}:{})})});
+        Object.assign(person,{method:result.payment.method,paid:result.payment.paid,paidAt:result.payment.paidAt,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
+        render();message('#dashboard-status',person.paid?'Confirmed $150 '+(method==='rollover'?'rollover for ':'Venmo payment from ')+person.name+'.':'Payment mark removed for '+person.name+'. Challenge enrollment is also cleared.');
       }catch(error){message('#dashboard-status',error.message,true);for(const control of action.querySelectorAll('button'))control.disabled=false;row.classList.remove('pending');button.textContent=person.paid?'Undo payment mark':'Mark $150 received';}
-    });
+    };
+    button.addEventListener('click',()=>funding('venmo'));
     action.append(button);
+    if(nextRound&&person.source==='returning'&&!person.paid){
+      const rollover=node('button','Confirm $150 rollover','payment-action');
+      rollover.type='button';rollover.addEventListener('click',()=>funding('rollover'));action.append(rollover);
+    }
     if(person.paid){
       const enroll=node('button',person.enrolled?'Undo enrollment':'Enroll in challenge','payment-action enroll'+(person.enrolled?' undo':''));
       enroll.type='button';enroll.setAttribute('aria-label',(person.enrolled?'Undo challenge enrollment for ':'Enroll in challenge: ')+person.name);
@@ -52,12 +67,12 @@ function render(){
         try{
           const result=await api('/api/admin-enrollment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,enrolled:!person.enrolled,expectedVersion:person.paymentVersion})});
           Object.assign(person,{paid:result.payment.paid,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
-          render();message('#dashboard-status',person.enrolled?person.name+' is enrolled in the founding challenge.':'Challenge enrollment removed for '+person.name+'. Payment remains received.');
+          render();message('#dashboard-status',person.enrolled?person.name+' is enrolled in this cohort.':'Challenge enrollment removed for '+person.name+'. Payment remains received.');
         }catch(error){render();message('#dashboard-status',error.message,true);}
       });
       action.prepend(enroll);
     }
-    if(person.enrolled){
+    if(person.enrolled&&person.source!=='returning'){
       const invite=node('button','Create login / reset link','payment-action invite');invite.type='button';
       invite.addEventListener('click',async()=>{
         invite.disabled=true;invite.textContent='Creating link…';

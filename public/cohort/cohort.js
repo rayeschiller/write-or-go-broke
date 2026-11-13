@@ -1,9 +1,11 @@
 import {filterWriting} from './writing-filters.js';
 const $=s=>document.querySelector(s);let visibleWriting=20;const expandedWriting=new Set();let model=null,mode='text',photoUrl=null,photoFile=null,existingPhotoId=null,editingDate=null,busy=false;
+const nextRound=new URLSearchParams(location.search).get('cohort')==='november-2026';
+const nextQuery=nextRound?'?cohort=november-2026':'';
 const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2}).format(c/100);
 function el(tag,text,cls){const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;}
 function toast(text){$('#toast').textContent=text;setTimeout(()=>$('#toast').textContent='',5500);}
-async function api(action,data){const response=await fetch('/api/participant'+(data?'':'?action='+action),{...(data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...data})}:{}),credentials:'same-origin',cache:'no-store'});let result;try{result=await response.json();}catch{throw Error('Could not connect. Please try again.');}if(response.status===401){location.replace('/challenge');throw Error('Please log in.');}if(!response.ok)throw Error(result.error||'Request failed.');return result;}
+async function api(action,data){const response=await fetch('/api/participant'+(nextQuery+(data?'':(nextQuery?'&':'?')+'action='+action)),{...(data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...data})}:{}),credentials:'same-origin',cache:'no-store'});let result;try{result=await response.json();}catch{throw Error('Could not connect. Please try again.');}if(response.status===401){location.replace('/challenge'+nextQuery);throw Error('Please log in.');}if(!response.ok)throw Error(result.error||'Request failed.');return result;}
 function view(name){for(const b of document.querySelectorAll('[data-view]')){const active=b.dataset.view===name;b.classList.toggle('active',active);if(b.getAttribute('role')==='tab')b.setAttribute('aria-selected',String(active));}$('#scoreboard-view').hidden=name!=='scoreboard';$('#writing-view').hidden=name!=='writing';}
 function dayLabel(date){return new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'});}
 function avatar(person){const initials=person.name.trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();return el('span',initials,'avatar');}
@@ -12,12 +14,14 @@ function render(resetFeed=true){
  $('#profile-name').textContent=me.name;$('#cohort-day').textContent=model.day?'Day '+model.day+' of 30':model.phase==='upcoming'?'Starts '+dayLabel(model.schedule.startDate):'30-day challenge complete';
  $('#actual-day').textContent=model.day?String(model.day).padStart(2,'0'):model.phase==='ended'?'30':'—';
  $('#actual-date').textContent=model.today?dayLabel(model.today):'';$('#actual-date').dateTime=model.today||'';
- $('#cohort-status').textContent=model.schedule.startDate?'Founding cohort · '+dayLabel(model.schedule.startDate)+' – '+dayLabel(model.endDate)+' · Midnight '+model.schedule.timezone:'Founding cohort · Schedule pending';
+ $('#cohort-label').textContent=nextRound?'NOVEMBER COHORT':'FOUNDING COHORT';
+ const cohortLabel=nextRound?'November cohort':'Founding cohort';
+ $('#cohort-status').textContent=model.schedule.startDate?cohortLabel+' · '+dayLabel(model.schedule.startDate)+' – '+dayLabel(model.endDate)+' · Midnight '+model.schedule.timezone:cohortLabel+' · Schedule pending';
  $('#protected').textContent=money(me.protectedCents);$('#earned').textContent='+'+money(me.earnedCents);$('#lost').textContent='−'+money(me.lostCents);$('#projected').textContent=money(me.projectedCents);$('#written-count').textContent=me.written+' days checked in';
  $('#checkin-heading').textContent=me.todayCompleted?'Today’s check-in is saved.':model.phase==='upcoming'?'Starts '+dayLabel(model.schedule.startDate):model.phase==='ended'?'The challenge is complete.':'Have you written today?';
  $('#checkin-detail').textContent=me.todayCompleted?'Today’s $5 is protected.':'AT LEAST 10 MIN BB';$('#checkin-open').textContent=me.todayCompleted?'Add or update writing':'I wrote today ↗';
  for(const id of ['#checkin-open','#sidebar-checkin','#share-open'])$(id).disabled=model.phase!=='active';
- $('.closed-day').textContent=model.phase==='active'?'◷ Today’s pool closes at midnight':model.phase==='ended'?'All 30 days are closed':'Day one is '+dayLabel(model.schedule.startDate);
+ $('.closed-day').textContent=model.phase==='active'?'◷ Today’s pool closes at midnight':model.phase==='ended'?'All 30 days are closed':model.schedule.startDate?'Day one is '+dayLabel(model.schedule.startDate):'Schedule pending';
  $('#days-range').textContent='DAYS 1–30';
  $('#scoreboard-body').replaceChildren();
  model.records.forEach((p,index)=>{
@@ -63,7 +67,7 @@ async function imageData(file){
 $('#checkin-form').addEventListener('submit',async event=>{
  event.preventDefault();if(busy)return;const text=$('#draft').value.trim();if($('#share').checked&&!text&&!existingPhotoId&&!(mode==='photo'&&photoFile)){$('#draft-error').textContent='Add writing or a photo, or turn off sharing.';return;}
  busy=true;const button=$('#checkin-form button[type=submit]');button.disabled=true;button.textContent='Saving…';
- try{let photoId=existingPhotoId;if(mode==='photo'&&photoFile){const image=await imageData(photoFile);const response=await fetch('/api/photo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image,...(editingDate?{date:editingDate}:{})})});const result=await response.json();if(!response.ok)throw Error(result.error||'Could not upload photo.');photoId=result.id;}
+ try{let photoId=existingPhotoId;if(mode==='photo'&&photoFile){const image=await imageData(photoFile);const response=await fetch('/api/photo'+nextQuery,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image,...(editingDate?{date:editingDate}:{})})});const result=await response.json();if(!response.ok)throw Error(result.error||'Could not upload photo.');photoId=result.id;}
   const wasEditing=!!editingDate;const result=await api(wasEditing?'edit-writing':'checkin',{...(wasEditing?{date:editingDate}:{wrote:$('#wrote').checked}),content:{text,photoId,shared:$('#share').checked}});clearPhoto();$('#checkin-dialog').close();$('#checkin-form').reset();await refresh();if(!wasEditing&&!result.checkin.alreadyCompleted)celebrate();else toast('Your writing is updated.');
  }catch(error){$('#draft-error').textContent=error.message;}finally{busy=false;button.disabled=false;button.textContent=editingDate?'Save changes':'I wrote today ✓';}
 });
@@ -74,6 +78,15 @@ $('#photo').addEventListener('change',()=>{const file=$('#photo').files[0];if(!f
 let remindersActive=false;
 function reminderState(){const email=$('#email-reminder').checked,evening=$('#evening-only').checked;$('#evening-only').disabled=!email;$('#reminder-state').textContent=!remindersActive?'Email reminders are not connected yet.':!email?'Email reminders are off.':evening?'You’ll get one email around 9 pm Pacific, only if you haven’t checked in. Text reminders are not connected.':'Email reminders are on around 9 am and 9 pm Pacific if you haven’t checked in. Text reminders are not connected.';}
 for(const id of ['#email-reminder','#evening-only','#sms-reminder'])$(id).addEventListener('change',async()=>{reminderState();try{await api('preferences',{email:$('#email-reminder').checked,sms:$('#sms-reminder').checked,emailTiming:$('#evening-only').checked?'evening':'both'});toast('Reminder preferences saved.');}catch(error){toast(error.message);}});
-for(const id of ['#logout','#footer-logout'])$(id).addEventListener('click',async()=>{try{await api('logout',{});location.replace('/challenge');}catch(error){toast(error.message);}});refresh().catch(error=>{$('#app-error').textContent=error.message;});
+for(const id of ['#logout','#footer-logout'])$(id).addEventListener('click',async()=>{try{await api('logout',{});location.replace('/challenge'+nextQuery);}catch(error){toast(error.message);}});refresh().then(async()=>{
+ try{
+  const next=await api('next-status');
+  const link=$('#round-link');
+  if(nextRound&&next.foundingEnrolled){link.href='/cohort';link.textContent='View founding cohort ↗';}
+  else if(next.enrolled){link.href='/cohort?cohort=november-2026';link.textContent='Open November cohort ↗';}
+  else if(next.requested){link.textContent='View November signup ↗';}
+  link.hidden=nextRound?!next.foundingEnrolled:!(next.canJoin||next.requested);
+ }catch{}
+}).catch(error=>{$('#app-error').textContent=error.message;});
 // Full cohort reads are expensive; saves still refresh immediately above.
 setInterval(()=>{if(!busy&&!document.hidden&&!document.querySelector('dialog[open]'))refresh().catch(()=>{});},15*60*1000);

@@ -1,15 +1,36 @@
 const $=s=>document.querySelector(s);let model=null,busy=false;
+const nextQuery='?cohort=november-2026';
+const nextRound=new URLSearchParams(location.search).get('cohort')==='november-2026';
 const params=new URLSearchParams(location.hash.slice(1));let setup=params.get('setup'),access=params.get('token');
 if(setup||access)history.replaceState(null,'',location.pathname+location.search);
 function message(selector,text,error=false){const e=$(selector);e.textContent=text;e.className=text?(error?'error':'notice'):'';}
 async function api(data){
- const r=await fetch('/api/participant',{...(data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}:{}),credentials:'same-origin',cache:'no-store'});
+ const r=await fetch('/api/participant'+(nextRound?nextQuery:''),{...(data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}:{}),credentials:'same-origin',cache:'no-store'});
  let result;try{result=await r.json();}catch{throw Error('Could not connect. Please refresh and try again.');}
  if(!r.ok){const e=Error(result.error||'Could not complete the request.');e.status=r.status;throw e;}return result;
 }
-function loginView(){if(!setup){$('#identifier-field').hidden=false;$('#identifier').required=true;$('#confirm-field').hidden=true;$('#confirm-password').required=false;$('#login-title').innerHTML='Your writing<br>era awaits.';$('#login-intro').textContent='Use the email or phone number from your signup and your password.';$('#password-label').textContent='PASSWORD';$('#password').autocomplete='current-password';$('#login-button').textContent='LET’S WRITE ↗';$('#setup-help').textContent='First time here or forgot your password? Ask Raye for your private setup link.';}model=null;$('#challenge-panel').hidden=true;$('#login-panel').hidden=false;$('#logout').hidden=true;$('#calendar').replaceChildren();}
+function loginView(){if(!setup){$('#identifier-field').hidden=false;$('#identifier').required=true;$('#confirm-field').hidden=true;$('#confirm-password').required=false;$('#login-title').innerHTML='Your writing<br>era awaits.';$('#login-intro').textContent='Use the email or phone number from your signup and your password.';$('#password-label').textContent='PASSWORD';$('#password').autocomplete='current-password';$('#login-button').textContent='LET’S WRITE ↗';$('#setup-help').textContent='First time here or forgot your password? Ask Raye for your private setup link.';}model=null;$('#next-panel').hidden=true;$('#challenge-panel').hidden=true;$('#login-panel').hidden=false;$('#logout').hidden=true;$('#calendar').replaceChildren();}
 function dayLabel(value){const [year,month,day]=value.split('-');return new Date(Date.UTC(+year,+month-1,+day)).toLocaleDateString(undefined,{month:'short',day:'numeric',timeZone:'UTC'});}
+function renderNext(){
+ const next=model.next;
+ if(next.enrolled&&!next.foundingEnrolled){location.replace('/cohort'+nextQuery);return;}
+ $('#november-link').hidden=!next.enrolled;
+ $('#login-panel').hidden=true;
+ $('#challenge-panel').hidden=true;
+ $('#next-panel').hidden=false;
+ $('#logout').hidden=false;
+ $('#founding-link').hidden=!next.foundingEnrolled;
+ $('#join-next').hidden=!next.canJoin||next.requested;
+ $('#next-status').textContent=next.enrolled?'You’re enrolled in the November cohort.':next.paid?'Raye confirmed your stake. Enrollment is pending.':next.requested?'You’re on the list. Confirm your $150 payment or rollover with Raye.':next.canJoin?'Keep writing with the same login. Raye will confirm your $150 payment or rollover before you can check in.':'There’s no November enrollment linked to this account.';
+}
+$('#join-next').addEventListener('click',async event=>{
+ const button=event.currentTarget;button.disabled=true;
+ try{await api({action:'join-next'});await refresh();}
+ catch(error){message('#next-status',error.message,true);}
+ finally{button.disabled=false;}
+});
 function render(){
+ if(model.next){renderNext();return;}
  if(model.enrolled&&model.paid){location.replace('/cohort');return;}
  $('#login-panel').hidden=true;$('#challenge-panel').hidden=false;$('#logout').hidden=false;
  $('#greeting').textContent=model.person.name.toUpperCase()+' / FOUNDING COHORT';
