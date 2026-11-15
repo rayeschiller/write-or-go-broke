@@ -5,10 +5,11 @@ if(nextRound){
   $('#enrolled-cohort').textContent='November cohort';
   $('#payment-total-label').textContent='STAKE CONFIRMED';
   $('#schedule-form').hidden=true;
-  $('#payment-note').textContent='Confirm a $150 Venmo payment or a $150 rollover you’ve reconciled separately, then enroll the writer. Check the founding payout before recording a rollover. These entries only track the November stake.';
+  $('#payment-note').textContent='Confirm a $150 Venmo payment or record a reconciled rollover and any Venmo top-up, then enroll the writer. Check the founding payout before recording a rollover. These entries only track the November stake.';
 }
 let signups=[],filter='all',loading=false,scheduleVersion=null;
 const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(value);
+const moneyExact=cents=>(cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'});
 function date(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?'':d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 function phone(value){return String(value).replace(/^\+1(\d{3})(\d{3})(\d{4})$/,'($1) $2-$3');}
 function node(tag,text,className){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;}
@@ -36,7 +37,8 @@ function render(){
     const email=node('a',person.email);email.href='mailto:'+person.email;
     const tel=node('a',phone(person.phone));tel.href='tel:'+person.phone;links.append(email,tel);contact.append(links);
     const joined=node('div');joined.append(node('span',person.source==='returning'?'RETURNING WRITER':'SIGNED UP','row-label'),node('span',date(person.createdAt),'signup-date'));
-    const payment=node('div');payment.append(node('span','VENMO STATUS','row-label'),node('span',person.paid?(person.method==='rollover'?'$150 ROLLOVER':'$150 RECEIVED'):'NOT RECEIVED','badge'+(person.paid?' paid':'')));
+    const payment=node('div');payment.append(node('span','VENMO STATUS','row-label'),node('span',person.paid?(person.method==='rollover'?moneyExact(person.rolloverCents??15000)+' ROLLOVER':'$150 RECEIVED'):'NOT RECEIVED','badge'+(person.paid?' paid':'')));
+    if(person.rollover)payment.append(node('div','BALANCE ROLLOVER REQUESTED','payment-date'));
     if(person.paidAt)payment.append(node('div','Marked '+date(person.paidAt),'payment-date'));
     payment.append(node('span',person.enrolled?'CHALLENGE: ENROLLED':person.paid?'READY TO ENROLL':'NOT ENROLLED','badge enrollment'+(person.enrolled?' paid':'')));
     if(person.enrolledAt)payment.append(node('div','Enrolled '+date(person.enrolledAt),'payment-date'));
@@ -44,18 +46,27 @@ function render(){
     const action=node('div');const button=node('button',person.paid?'Undo payment mark':'Mark $150 received','payment-action'+(person.paid?' undo':''));
     button.type='button';button.setAttribute('aria-label',(person.paid?'Undo payment for ':'Mark $150 Venmo received from ')+person.name);
     const funding=async method=>{
-      if(method==='rollover'&&!window.confirm('Confirm that you reconciled $150 from this writer’s founding cohort payout.'))return;
+      let rolloverCents;
+      if(method==='rollover'){
+        const input=window.prompt('How much of this writer’s final founding balance are you applying? Enter dollars, up to $150.','150');
+        if(input===null)return;
+        rolloverCents=Math.round(Number(input.trim())*100);
+        if(!/^\d+(\.\d{1,2})?$/.test(input.trim())||rolloverCents<1||rolloverCents>15000){
+          message('#dashboard-status','Enter a rollover between $0.01 and $150.',true);return;
+        }
+        if(!window.confirm('Confirm '+moneyExact(rolloverCents)+' from the founding balance and '+moneyExact(15000-rolloverCents)+' received on Venmo.'))return;
+      }
       for(const control of action.querySelectorAll('button'))control.disabled=true;row.classList.add('pending');button.textContent='Saving…';message('#dashboard-status','');
       try{
-        const result=await api('/api/admin-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,paid:!person.paid,expectedVersion:person.paymentVersion,...(nextRound?{method}:{})})});
-        Object.assign(person,{method:result.payment.method,paid:result.payment.paid,paidAt:result.payment.paidAt,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
+        const result=await api('/api/admin-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,paid:!person.paid,expectedVersion:person.paymentVersion,...(nextRound?{method,rolloverCents}:{})})});
+        Object.assign(person,{method:result.payment.method,rolloverCents:result.payment.rolloverCents,paid:result.payment.paid,paidAt:result.payment.paidAt,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
         render();message('#dashboard-status',person.paid?'Confirmed $150 '+(method==='rollover'?'rollover for ':'Venmo payment from ')+person.name+'.':'Payment mark removed for '+person.name+'. Challenge enrollment is also cleared.');
       }catch(error){message('#dashboard-status',error.message,true);for(const control of action.querySelectorAll('button'))control.disabled=false;row.classList.remove('pending');button.textContent=person.paid?'Undo payment mark':'Mark $150 received';}
     };
     button.addEventListener('click',()=>funding('venmo'));
     action.append(button);
     if(nextRound&&person.source==='returning'&&!person.paid){
-      const rollover=node('button','Confirm $150 rollover','payment-action');
+      const rollover=node('button','Confirm rollover','payment-action');
       rollover.type='button';rollover.addEventListener('click',()=>funding('rollover'));action.append(rollover);
     }
     if(person.paid){

@@ -20,15 +20,9 @@ function renderNext(){
  $('#next-panel').hidden=false;
  $('#logout').hidden=false;
  $('#founding-link').hidden=!next.foundingEnrolled;
- $('#join-next').hidden=!next.canJoin||next.requested;
- $('#next-status').textContent=next.enrolled?'You’re enrolled in the November cohort.':next.paid?'Raye confirmed your stake. Enrollment is pending.':next.requested?'You’re on the list. Confirm your $150 payment or rollover with Raye.':next.canJoin?'Keep writing with the same login. Raye will confirm your $150 payment or rollover before you can check in.':'There’s no November enrollment linked to this account.';
+ $('#renewal-link').hidden=next.enrolled||!(next.canJoin||next.requested);
+ $('#next-status').textContent=next.enrolled?'You’re enrolled in the November cohort.':next.foundingEnrolled?'Manage your November enrollment from your cohort dashboard.':next.paid?'Raye confirmed your stake. Enrollment is pending.':'There’s no November enrollment linked to this account.';
 }
-$('#join-next').addEventListener('click',async event=>{
- const button=event.currentTarget;button.disabled=true;
- try{await api({action:'join-next'});await refresh();}
- catch(error){message('#next-status',error.message,true);}
- finally{button.disabled=false;}
-});
 function render(){
  if(model.next){renderNext();return;}
  if(model.enrolled&&model.paid){location.replace('/cohort');return;}

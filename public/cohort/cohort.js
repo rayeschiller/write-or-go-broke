@@ -78,15 +78,80 @@ $('#photo').addEventListener('change',()=>{const file=$('#photo').files[0];if(!f
 let remindersActive=false;
 function reminderState(){const email=$('#email-reminder').checked,evening=$('#evening-only').checked;$('#evening-only').disabled=!email;$('#reminder-state').textContent=!remindersActive?'Email reminders are not connected yet.':!email?'Email reminders are off.':evening?'You’ll get one email around 9 pm Pacific, only if you haven’t checked in. Text reminders are not connected.':'Email reminders are on around 9 am and 9 pm Pacific if you haven’t checked in. Text reminders are not connected.';}
 for(const id of ['#email-reminder','#evening-only','#sms-reminder'])$(id).addEventListener('change',async()=>{reminderState();try{await api('preferences',{email:$('#email-reminder').checked,sms:$('#sms-reminder').checked,emailTiming:$('#evening-only').checked?'evening':'both'});toast('Reminder preferences saved.');}catch(error){toast(error.message);}});
-for(const id of ['#logout','#footer-logout'])$(id).addEventListener('click',async()=>{try{await api('logout',{});location.replace('/challenge'+nextQuery);}catch(error){toast(error.message);}});refresh().then(async()=>{
+for(const id of ['#logout','#footer-logout'])$(id).addEventListener('click',async()=>{try{await api('logout',{});location.replace('/challenge'+nextQuery);}catch(error){toast(error.message);}});refresh().then(loadRenewalEntry).catch(error=>{$('#app-error').textContent=error.message;});
+let renewal;
+
+function renderRenewalEntry(next){
+ $('#founding-round-link').hidden=!(nextRound&&next.foundingEnrolled);
+ $('#renewal-row').hidden=nextRound||!(next.canJoin||next.requested||next.enrolled);
+ $('#round-link').hidden=!next.enrolled;
+ const button=$('#renewal-open');
+ button.hidden=next.enrolled;
+ button.textContent=next.requested?'View request':'Enroll in next cohort?';
+ const status=$('#renewal-row-status');
+ if(next.enrolled)status.textContent='Enrolled';
+ else if(next.paid)status.textContent='Stake confirmed · Enrollment pending';
+ else if(next.requested)status.textContent=next.rollover?'Enrollment requested · Rollover pending':'Enrollment requested';
+ else status.textContent='Use your current balance toward the next cohort.';
+}
+
+async function loadRenewalEntry(){
  try{
-  const next=await api('next-status');
-  const link=$('#round-link');
-  if(nextRound&&next.foundingEnrolled){link.href='/cohort';link.textContent='View founding cohort ↗';}
-  else if(next.enrolled){link.href='/cohort?cohort=november-2026';link.textContent='Open November cohort ↗';}
-  else if(next.requested){link.textContent='View November signup ↗';}
-  link.hidden=nextRound?!next.foundingEnrolled:!(next.canJoin||next.requested);
- }catch{}
-}).catch(error=>{$('#app-error').textContent=error.message;});
+  renderRenewalEntry(await api('next-status'));
+  if(location.hash==='#renewal'&&!$('#renewal-row').hidden&&!$('#renewal-open').hidden)openRenewal();
+ }catch(error){toast(error.message);}
+}
+
+function renderQuote(){
+ const {next,quote}=renewal;
+ $('#rollover-quote').hidden=!quote;
+ if(!quote)return;
+ const useBalance=next.requested?next.rollover:$('#rollover').checked;
+ $('#quote-heading').textContent=quote.estimated?'Estimated payment and payout':'Payment and payout';
+ $('#quote-balance').textContent=money(quote.balanceCents);
+ $('#quote-credit').textContent=money(useBalance?quote.rolloverCents:0);
+ $('#quote-owed').textContent=money(useBalance?quote.owedCents:quote.stakeCents);
+ $('#quote-payout').textContent=money(useBalance?quote.payoutCents:quote.balanceCents);
+}
+
+function renderRenewal(){
+ const {next}=renewal;
+ renderRenewalEntry(next);
+ const canSubmit=next.canJoin&&!next.requested;
+ $('#renewal-form').hidden=!canSubmit;
+ $('#join-next').hidden=!canSubmit;
+ $('#renewal-status').textContent=next.enrolled?'You’re enrolled in the November cohort.':
+  next.paid?'Raye confirmed your stake. Enrollment is pending.':
+  next.requested?(next.rollover?'Rollover requested. Raye will confirm your final balance and any Venmo top-up.':'Enrollment requested. Send $150 on Venmo to @Raye-Schiller.'):
+  next.canJoin?'Choose how to fund your November stake.':'November enrollment is closed.';
+ renderQuote();
+}
+
+async function openRenewal(){
+ $('#renewal-status').textContent='Loading your balance…';
+ $('#renewal-error').textContent='';
+ $('#renewal-form').hidden=true;
+ $('#join-next').hidden=true;
+ $('#rollover-quote').hidden=true;
+ $('#renewal-dialog').showModal();
+ try{renewal=await api('renewal-status');renderRenewal();}
+ catch(error){$('#renewal-status').textContent=error.message;}
+}
+
+$('#renewal-open').addEventListener('click',openRenewal);
+$('#rollover').addEventListener('change',renderQuote);
+$('#renewal-form').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const button=$('#join-next');
+ const rollOver=$('#rollover').checked;
+ button.disabled=true;
+ $('#renewal-error').textContent='';
+ try{
+  const saved=await api('join-next',{rollover:rollOver});
+  Object.assign(renewal.next,saved);
+  renderRenewal();
+ }catch(error){$('#renewal-error').textContent=error.message;}
+ finally{button.disabled=false;}
+});
 // Full cohort reads are expensive; saves still refresh immediately above.
 setInterval(()=>{if(!busy&&!document.hidden&&!document.querySelector('dialog[open]'))refresh().catch(()=>{});},15*60*1000);

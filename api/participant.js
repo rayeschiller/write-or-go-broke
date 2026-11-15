@@ -1,5 +1,5 @@
 import {FOUNDING,NEXT,nextQuery} from '../lib/cohorts.js';
-import {joinNext,nextStatus,personInCohort} from '../lib/next-cohort.js';
+import {joinNext,nextStatus,personInCohort,rolloverQuote} from '../lib/next-cohort.js';
 import {adminCheckins,editCheckin} from '../lib/admin-checkins.js';
 import {community,savePreferences,adminFinances,recordPayout,editWriting} from '../lib/community-store.js';
 import {authenticated,sameOrigin,json,body} from '../lib/admin-auth.js';
@@ -22,6 +22,11 @@ export default async function handler(req,res){
       const person=await validateIdentity(participantIdentity(req));
       if(!person)return json(res,401,{error:'Please log in to your challenge.'});
       if(query.get('action')==='next-status')return json(res,200,await nextStatus(person));
+      if(query.get('action')==='renewal-status'){
+        const next=await nextStatus(person);
+        const quote=next.foundingEnrolled&&(next.canJoin||next.requested)?await rolloverQuote(person):null;
+        return json(res,200,{next,quote});
+      }
       if(query.get('action')==='community')return json(res,200,await community(await personInCohort(person,cohort),cohort));
       if(cohort===NEXT || person.accountCohort===NEXT){
         const next=await nextStatus(person);
@@ -64,7 +69,7 @@ export default async function handler(req,res){
     if(data.action==='join-next'){
       const person=await validateIdentity(participantIdentity(req));
       if(!person)return json(res,401,{error:'Please log in to continue.'});
-      return json(res,200,await joinNext(person));
+      return json(res,200,await joinNext(person,data.rollover));
     }
     if(data.action==='preferences'){const person=await validateIdentity(participantIdentity(req));if(!person)return json(res,401,{error:'Please log in.'});return json(res,200,{preferences:await savePreferences(await personInCohort(person,cohort),data,cohort)});}
     if(data.action==='edit-writing'){const person=await validateIdentity(participantIdentity(req));if(!person)return json(res,401,{error:'Please log in.'});return json(res,200,{ok:true,writing:await editWriting(await personInCohort(person,cohort),data.date,data.content,cohort)});}

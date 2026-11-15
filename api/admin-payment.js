@@ -10,7 +10,11 @@ export default async function handler(req,res){
   if(cohort!==FOUNDING&&cohort!==NEXT)return json(res,400,{error:'Invalid cohort.'});
   if(!/^[a-f0-9]{64}$/.test(data.id||'') || typeof data.paid!=='boolean' || !(data.expectedVersion===null || (typeof data.expectedVersion==='string' && data.expectedVersion.length<=200)))return json(res,400,{error:'Invalid payment update.'});
   if(cohort===NEXT&&data.paid&&!['venmo','rollover'].includes(data.method))return json(res,400,{error:'Choose how the stake was funded.'});
-  try{return json(res,200,{ok:true,payment:await getStore().setPayment(data.id,data.paid,data.expectedVersion,cohort,data.method)});}
+  if(cohort===NEXT&&data.paid&&data.method==='rollover'&&
+    (!Number.isInteger(data.rolloverCents)||data.rolloverCents<1||data.rolloverCents>15000)){
+    return json(res,400,{error:'Enter a rollover amount between $0.01 and $150.'});
+  }
+  try{return json(res,200,{ok:true,payment:await getStore().setPayment(data.id,data.paid,data.expectedVersion,cohort,data.method,data.rolloverCents)});}
   catch(error){
     if(error instanceof PaymentRequired)return json(res,422,{error:'Only returning writers can roll over a stake.'});
     if(error instanceof PaymentConflict)return json(res,409,{error:'This payment was changed in another tab. Refresh and try again.'});

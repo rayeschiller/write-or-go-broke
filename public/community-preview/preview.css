@@ -39,3 +39,41 @@ body,.sidebar{background:var(--paper);color:var(--ink)}.preview-strip{background
 .review-banner{background:#171815;color:white;padding:12px 20px;text-align:center;font:12px Arial,sans-serif}
 
 .post-text.is-collapsed{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;overflow:hidden;max-height:11.4em}.read-writing{display:block;font-size:12px;margin:-8px 0 18px;text-decoration:underline;text-underline-offset:3px}.writing-pagination{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:18px;padding:24px 0;font-size:12px;color:var(--muted)}.writing-card{min-width:0}.writing-card .post-text{overflow-wrap:anywhere}.writing-pagination .secondary{font-size:13px}
+
+#renewal-dialog dd { margin: 0; font-weight: 700; white-space: nowrap; }
+#renewal-dialog .balance-line { gap: 1rem; }
+#renewal-error:empty { display: none; }
+
+#renewal-row:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin: 0 0 24px;
+  padding: 12px 0;
+}
+
+#renewal-row-title { font-size: 1.125rem; }
+#renewal-row-status { margin-top: 4px; color: var(--muted); }
+
+@media (max-width: 650px) {
+  #renewal-row:not([hidden]) { display: grid; }
+  #renewal-open { width: 100%; }
+}
+
+#renewal-open {
+  min-height: 56px;
+  padding: 14px 24px;
+  border: 2px solid var(--ink);
+  background: #ff85c2;
+  color: var(--ink);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+
+#renewal-open:hover { background: #ffa6d1; }
+#renewal-open:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
