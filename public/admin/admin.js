@@ -26,6 +26,7 @@ let signups=[],filter='all',loading=false,scheduleVersion=null;
 let foundingFinance = null;
 let foundingBalances = new Map();
 let balanceError = '';
+let financeLoading = false;
 const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(value);
 const moneyExact=cents=>(cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'});
 function date(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?'':d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
@@ -106,7 +107,7 @@ function render() {
           joined.append(node('div', 'Founding payout already marked sent. Reconcile before rollover.', 'payment-date'));
         }
       } else {
-        joined.append(node('div', balanceError || 'No founding balance found. Review the founding roster.', 'status-error'));
+        joined.append(node('div', financeLoading ? 'Loading founding balance…' : balanceError || 'No founding balance found. Review the founding roster.', 'status-error'));
       }
     }
     const payment=node('div');payment.append(node('span','PAYMENT STATUS','row-label'),node('span',person.paid?(person.method==='rollover'?moneyExact(person.rolloverCents??15000)+' ROLLOVER':'$150 RECEIVED'):'NOT RECEIVED','badge'+(person.paid?' paid':'')));
@@ -201,12 +202,12 @@ function render() {
 }
 async function refresh(){
   if(loading)return;loading=true;$('#refresh').disabled=true;message('#dashboard-status','');
+  const financesTask = showExtensions ? loadFinances() : Promise.resolve();
   try{
     const data=await api('/api/admin-signups');
     signups=data.signups;
-    if (showExtensions) await loadFinances();
     $('#login').hidden=true;$('#dashboard').hidden=false;$('#logout').hidden=false;render();
-    await loadSchedule();
+    await Promise.all([loadSchedule(), financesTask]);
     $('#sync-time').textContent='Updated '+new Date().toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
   }catch(error){message($('#dashboard').hidden?'#login-status':'#dashboard-status',error.message,true);}
   finally{loading=false;$('#refresh').disabled=false;}
@@ -239,7 +240,9 @@ $('#schedule-form').addEventListener('submit',async event=>{
 
 $('#finance-refresh').addEventListener('click',loadFinances);
 async function loadFinances(){
- const button=$('#finance-refresh');button.disabled=true;message('#finance-status','');
+ financeLoading = true;
+ const button=$('#finance-refresh');button.disabled=true;
+ message('#finance-status','Loading balances…');
  try{
   const finance=await api('/api/participant?action=admin-finances',{},showExtensions?'founding-cohort':nextRound?'november-2026':'founding-cohort');
   if (showExtensions) {
@@ -264,6 +267,7 @@ async function loadFinances(){
    }
    message('#finance-status',error.message,true);
  } finally {
+   financeLoading = false;
    button.disabled=false;
    if (showExtensions) render();
  }
