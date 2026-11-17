@@ -10,6 +10,10 @@ if (showExtensions) {
   $('#roster-title').textContent = 'Extension requests';
   $('#total-label').textContent = 'EXTENSION REQUESTS';
   $('#search').placeholder = 'Find a returning writer…';
+  $('#finance-title').textContent = 'EVERYONE’S FOUNDING COHORT BALANCES';
+  $('#finance-panel').open = true;
+  $('#finance-note').textContent = 'All founding members appear here. Rollover amounts use these balances. Projected amounts change until the current round is settled.';
+  $('#request-date-heading').textContent = 'REQUEST / FOUNDING BALANCE';
 }
 if(nextRound){
   $('#admin-cohort-label').textContent='NOVEMBER COHORT / ADMIN';
@@ -19,15 +23,18 @@ if(nextRound){
   $('#payment-note').textContent='Confirm a $150 Venmo payment or record a reconciled rollover and any Venmo top-up, then enroll the writer. Check the founding payout before recording a rollover. These entries only track the November stake.';
 }
 let signups=[],filter='all',loading=false,scheduleVersion=null;
+let foundingFinance = null;
+let foundingBalances = new Map();
+let balanceError = '';
 const money=value=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(value);
 const moneyExact=cents=>(cents/100).toLocaleString('en-US',{style:'currency',currency:'USD'});
 function date(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?'':d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}
 function phone(value){return String(value).replace(/^\+1(\d{3})(\d{3})(\d{4})$/,'($1) $2-$3');}
 function node(tag,text,className){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;}
 function message(selector,text,error=false){const el=$(selector);el.textContent=text;el.className=text?(error?'status-error':'status-ok'):'';}
-async function api(path,options={}){
-  const scoped=nextRound&&path!=='/api/admin-session';
-  const response=await fetch(scoped?path+(path.includes('?')?'&':'?')+'cohort=november-2026':path,{...options,credentials:'same-origin',cache:'no-store'});
+async function api(path,options={},cohort=nextRound?'november-2026':'founding-cohort'){
+  const scoped=cohort!=='founding-cohort'&&path!=='/api/admin-session';
+  const response=await fetch(scoped?path+(path.includes('?')?'&':'?')+'cohort='+encodeURIComponent(cohort):path,{...options,credentials:'same-origin',cache:'no-store'});
   let data;try{data=await response.json();}catch{throw Error('Unexpected response. Please refresh and try again.');}
   if(response.status===401 && path!=='/api/admin-session'){showLogin();throw Error('Please sign in again.');}
   if(!response.ok)throw Error(data.error||'Could not complete that request. Try again.');
@@ -80,6 +87,28 @@ function render() {
     const email=node('a',person.email);email.href='mailto:'+person.email;
     const tel=node('a',phone(person.phone));tel.href='tel:'+person.phone;links.append(email,tel);contact.append(links);
     const joined=node('div');joined.append(node('span',person.source==='returning'?'EXTENSION REQUESTED':'SIGNED UP','row-label'),node('span',date(person.createdAt),'signup-date'));
+    if (showExtensions) {
+      joined.append(node('span', 'FOUNDING BALANCE', 'row-label'));
+      const balance = foundingBalances.get(person.id);
+      if (balance) {
+        const estimated = foundingFinance.phase !== 'ended' || foundingFinance.unallocatedCents > 0;
+        joined.append(
+          node('strong', moneyExact(balance.projectedCents), 'request-balance'),
+          node('span', estimated ? 'Projected · Current round still settling' : 'Final balance', 'payment-date')
+        );
+        const credit = person.rollover ? Math.min(15000, balance.projectedCents) : 0;
+        joined.append(
+          node('div', 'Rollover toward November: ' + moneyExact(credit), 'payment-date'),
+          node('div', 'Venmo top-up owed: ' + moneyExact(15000 - credit), 'payment-date'),
+          node('div', 'Payout to writer: ' + moneyExact(balance.projectedCents - credit), 'payment-date')
+        );
+        if (balance.payout?.sent) {
+          joined.append(node('div', 'Founding payout already marked sent. Reconcile before rollover.', 'payment-date'));
+        }
+      } else {
+        joined.append(node('div', balanceError || 'No founding balance found. Review the founding roster.', 'status-error'));
+      }
+    }
     const payment=node('div');payment.append(node('span','PAYMENT STATUS','row-label'),node('span',person.paid?(person.method==='rollover'?moneyExact(person.rolloverCents??15000)+' ROLLOVER':'$150 RECEIVED'):'NOT RECEIVED','badge'+(person.paid?' paid':'')));
     if (person.source === 'returning') {
       const requestedFunding = person.rollover ? 'Requested: balance rollover' :
@@ -94,12 +123,14 @@ function render() {
     payment.append(node('span',person.enrolled?'CHALLENGE: ENROLLED':person.paid?'READY TO ENROLL':'NOT ENROLLED','badge enrollment'+(person.enrolled?' paid':'')));
     if(person.enrolledAt)payment.append(node('div','Enrolled '+date(person.enrolledAt),'payment-date'));
     if(person.enrolled)payment.append(node('div',(person.completedDays||0)+' / 30 days written'+(person.lastCheckin?' · Latest '+person.lastCheckin:''),'payment-date'));
-    const action=node('div');const button=node('button',person.paid?'Undo payment mark':'Mark $150 received','payment-action'+(person.paid?' undo':''));
+    const action=node('div',undefined,'person-actions');const button=node('button',person.paid?'Undo payment mark':'Mark $150 received','payment-action'+(person.paid?' undo':''));
     button.type='button';button.setAttribute('aria-label',(person.paid?'Undo payment for ':'Mark $150 Venmo received from ')+person.name);
     const funding=async method=>{
       let rolloverCents;
       if(method==='rollover'){
-        const input=window.prompt('How much of this writer’s final founding balance are you applying? Enter dollars, up to $150.','150');
+        const balance = foundingBalances.get(person.id);
+        const suggestedCredit = balance ? Math.min(15000, balance.projectedCents) : 15000;
+        const input=window.prompt('How much of this writer’s final founding balance are you applying? Enter dollars, up to $150.',String(suggestedCredit / 100));
         if(input===null)return;
         rolloverCents=Math.round(Number(input.trim())*100);
         if(!/^\d+(\.\d{1,2})?$/.test(input.trim())||rolloverCents<1||rolloverCents>15000){
@@ -118,7 +149,7 @@ function render() {
     action.append(button);
     if(nextRound&&person.source==='returning'&&!person.paid){
       const rollover=node('button','Confirm rollover','payment-action');
-      rollover.type='button';rollover.addEventListener('click',()=>funding('rollover'));action.append(rollover);
+      rollover.classList.add('rollover-action');rollover.type='button';rollover.addEventListener('click',()=>funding('rollover'));action.append(rollover);
     }
     if(person.paid){
       const enroll=node('button',person.enrolled?'Undo enrollment':'Enroll in challenge','payment-action enroll'+(person.enrolled?' undo':''));
@@ -171,7 +202,9 @@ function render() {
 async function refresh(){
   if(loading)return;loading=true;$('#refresh').disabled=true;message('#dashboard-status','');
   try{
-    const data=await api('/api/admin-signups');signups=data.signups;
+    const data=await api('/api/admin-signups');
+    signups=data.signups;
+    if (showExtensions) await loadFinances();
     $('#login').hidden=true;$('#dashboard').hidden=false;$('#logout').hidden=false;render();
     await loadSchedule();
     $('#sync-time').textContent='Updated '+new Date().toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
@@ -208,14 +241,30 @@ $('#finance-refresh').addEventListener('click',loadFinances);
 async function loadFinances(){
  const button=$('#finance-refresh');button.disabled=true;message('#finance-status','');
  try{
-  const finance=await api('/api/participant?action=admin-finances');const records=$('#finance-records');records.replaceChildren();
+  const finance=await api('/api/participant?action=admin-finances',{},showExtensions?'founding-cohort':nextRound?'november-2026':'founding-cohort');
+  if (showExtensions) {
+    foundingFinance = finance;
+    foundingBalances = new Map(finance.records.map(person => [person.id, person]));
+    balanceError = '';
+  }
+  const records=$('#finance-records');records.replaceChildren();
   if(finance.unallocatedCents)message('#finance-status','Unallocated pools: '+money(finance.unallocatedCents/100)+'. No one checked in on those days. Payouts stay blocked until resolved.',true);
   for(const person of finance.records){
    const row=node('div',undefined,'finance-row');const info=node('div');info.append(node('strong',person.name),node('p','Return: '+(person.projectedCents/100).toLocaleString('en-US',{style:'currency',currency:'USD'})+' · Lost '+money(person.lostCents/100)+' · Earned '+(person.earnedCents/100).toLocaleString('en-US',{style:'currency',currency:'USD'})));
    const mark=node('button',person.payout?.sent?'Undo payout mark':'Mark Venmo payout sent','secondary');mark.disabled=finance.phase!=='ended'||finance.unallocatedCents>0;
-   mark.addEventListener('click',async()=>{mark.disabled=true;try{await api('/api/participant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'admin-payout',id:person.id,amountCents:person.projectedCents,sent:!person.payout?.sent,expectedVersion:person.payoutVersion})});await loadFinances();}catch(error){message('#finance-status',error.message,true);mark.disabled=false;}});
+   mark.addEventListener('click',async()=>{mark.disabled=true;try{await api('/api/participant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'admin-payout',id:person.id,amountCents:person.projectedCents,sent:!person.payout?.sent,expectedVersion:person.payoutVersion})},showExtensions?'founding-cohort':nextRound?'november-2026':'founding-cohort');await loadFinances();}catch(error){message('#finance-status',error.message,true);mark.disabled=false;}});
    row.append(info,mark);records.append(row);
   }
   if(finance.phase!=='ended'&&!finance.unallocatedCents)message('#finance-status','Projected balances. Final payouts open after the challenge ends.');
- }catch(error){message('#finance-status',error.message,true);}finally{button.disabled=false;}
+ } catch(error) {
+   if (showExtensions) {
+     foundingFinance = null;
+     foundingBalances = new Map();
+     balanceError = error.message;
+   }
+   message('#finance-status',error.message,true);
+ } finally {
+   button.disabled=false;
+   if (showExtensions) render();
+ }
 }

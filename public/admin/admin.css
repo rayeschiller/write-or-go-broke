@@ -20,3 +20,39 @@
   border-color: var(--ink, #171815);
   font-weight: 700;
 }
+
+.person-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.person-actions .payment-action {
+  min-height: 44px;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.person-actions .rollover-action {
+  background: #ff85c2;
+  color: var(--ink);
+}
+
+.request-balance {
+  display: block;
+  font-size: 24px;
+  margin: 8px 0 4px;
+}
+
+.person > div { min-width: 0; }
+.finance-row > div { min-width: 0; }
+.finance-row .secondary { flex-shrink: 0; }
+
+.dashboard-title > div { min-width: 0; }
+.dashboard-title h1 { overflow-wrap: anywhere; }
+.dashboard-title > button { flex-shrink: 0; }
+
+@media (max-width: 700px) {
+  .dashboard-title { align-items: flex-start; flex-direction: column; }
+  .dashboard-title h1 { font-size: clamp(40px, 13vw, 60px); }
+}
