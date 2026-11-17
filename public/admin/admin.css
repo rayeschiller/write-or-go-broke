@@ -7,3 +7,16 @@
 .finance-row{display:flex;justify-content:space-between;align-items:center;gap:18px;border-bottom:1px solid #c6c9bc;padding:20px 0}.finance-row p{font-size:11px;line-height:1.8}.finance-row .secondary{margin:0}@media(max-width:600px){.finance-row{align-items:start;flex-direction:column}}
 
 .checkin-editor{margin-top:18px;border-top:1px solid #a7aaa0;padding-top:12px}.checkin-editor select{width:100%;padding:12px;background:var(--paper);color:var(--ink)}.checkin-editor input[type=checkbox]{margin-right:8px}.checkin-editor button{margin-top:12px}
+
+.roster-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.roster-nav a { text-decoration: none; }
+.roster-nav [aria-current="page"] {
+  border-color: var(--ink, #171815);
+  font-weight: 700;
+}

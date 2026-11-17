@@ -1,5 +1,16 @@
 const $=selector=>document.querySelector(selector);
-const nextRound=new URLSearchParams(location.search).get('cohort')==='november-2026';
+const queryParams = new URLSearchParams(location.search);
+const nextRound = queryParams.get('cohort') === 'november-2026';
+const showExtensions = nextRound && queryParams.get('view') === 'extensions';
+const activeRoster = showExtensions ? '#extension-requests-link' :
+  nextRound ? '#november-roster-link' : '#founding-roster-link';
+$(activeRoster).setAttribute('aria-current', 'page');
+
+if (showExtensions) {
+  $('#roster-title').textContent = 'Extension requests';
+  $('#total-label').textContent = 'EXTENSION REQUESTS';
+  $('#search').placeholder = 'Find a returning writer…';
+}
 if(nextRound){
   $('#admin-cohort-label').textContent='NOVEMBER COHORT / ADMIN';
   $('#enrolled-cohort').textContent='November cohort';
@@ -23,22 +34,62 @@ async function api(path,options={}){
   return data;
 }
 function showLogin(){signups=[];$('#roster').replaceChildren();$('#dashboard').hidden=true;$('#login').hidden=false;$('#logout').hidden=true;}
-function render(){
-  const paid=signups.filter(s=>s.paid).length;
-  $('#total').textContent=signups.length;$('#received').textContent=money(paid*150);$('#paid-count').textContent=paid+' '+(paid===1?'stake confirmed':'stakes confirmed');$('#unpaid').textContent=signups.length-paid;$('#enrolled-count').textContent=signups.filter(s=>s.enrolled).length;
-  const query=$('#search').value.trim().toLowerCase();
-  const rows=signups.filter(s=>(filter==='all'||(filter==='enrolled'?s.enrolled:filter==='paid'?s.paid:!s.paid))&&(!query||[s.name,s.email,s.phone,phone(s.phone)].some(v=>String(v||'').toLowerCase().includes(query))));
-  $('#result-count').textContent=rows.length+' of '+signups.length+' signups';
-  const roster=$('#roster');roster.replaceChildren();
-  if(!rows.length){roster.append(node('div',signups.length?'No signups match this search or filter.':'No signups yet. Your first comic will appear here.','empty-state'));return;}
+function matchesPaymentFilter(person) {
+  if (filter === 'paid') return person.paid;
+  if (filter === 'unpaid') return !person.paid;
+  if (filter === 'enrolled') return person.enrolled;
+  return true;
+}
+
+function render() {
+  const extensions = signups.filter(person => person.source === 'returning');
+  const records = showExtensions ? extensions : signups;
+  const paid = records.filter(person => person.paid).length;
+  const pendingExtensions = extensions.filter(person => !person.enrolled).length;
+
+  if (nextRound) {
+    $('#extension-requests-link').textContent = 'Extension requests (' + pendingExtensions + ' pending)';
+  }
+  $('#total').textContent = records.length;
+  $('#received').textContent = money(paid * 150);
+  $('#paid-count').textContent = paid + (paid === 1 ? ' stake confirmed' : ' stakes confirmed');
+  $('#unpaid').textContent = records.length - paid;
+  $('#enrolled-count').textContent = records.filter(person => person.enrolled).length;
+
+  const search = $('#search').value.trim().toLowerCase();
+  const rows = records.filter(person => {
+    const searchableFields = [person.name, person.email, person.phone, phone(person.phone)];
+    return matchesPaymentFilter(person) && searchableFields.some(value =>
+      String(value || '').toLowerCase().includes(search)
+    );
+  });
+
+  const countLabel = showExtensions ? 'extension requests' : 'signups';
+  $('#result-count').textContent = rows.length + ' of ' + records.length + ' ' + countLabel;
+  const roster = $('#roster');
+  roster.replaceChildren();
+  if (!rows.length) {
+    const emptyMessage = records.length ? 'No ' + countLabel + ' match this search or filter.' :
+      'No ' + countLabel + ' yet.';
+    roster.append(node('div', emptyMessage, 'empty-state'));
+    return;
+  }
   for(const person of rows){
     const row=node('article',undefined,'person');row.setAttribute('role','listitem');
     const contact=node('div');contact.append(node('h2',person.name));const links=node('div',undefined,'contact');
     const email=node('a',person.email);email.href='mailto:'+person.email;
     const tel=node('a',phone(person.phone));tel.href='tel:'+person.phone;links.append(email,tel);contact.append(links);
-    const joined=node('div');joined.append(node('span',person.source==='returning'?'RETURNING WRITER':'SIGNED UP','row-label'),node('span',date(person.createdAt),'signup-date'));
-    const payment=node('div');payment.append(node('span','VENMO STATUS','row-label'),node('span',person.paid?(person.method==='rollover'?moneyExact(person.rolloverCents??15000)+' ROLLOVER':'$150 RECEIVED'):'NOT RECEIVED','badge'+(person.paid?' paid':'')));
-    if(person.rollover)payment.append(node('div','BALANCE ROLLOVER REQUESTED','payment-date'));
+    const joined=node('div');joined.append(node('span',person.source==='returning'?'EXTENSION REQUESTED':'SIGNED UP','row-label'),node('span',date(person.createdAt),'signup-date'));
+    const payment=node('div');payment.append(node('span','PAYMENT STATUS','row-label'),node('span',person.paid?(person.method==='rollover'?moneyExact(person.rolloverCents??15000)+' ROLLOVER':'$150 RECEIVED'):'NOT RECEIVED','badge'+(person.paid?' paid':'')));
+    if (person.source === 'returning') {
+      const requestedFunding = person.rollover ? 'Requested: balance rollover' :
+        person.rollover === false ? 'Requested: Venmo payment' : 'Funding preference not specified';
+      payment.append(node('div', requestedFunding, 'payment-date'));
+    }
+    if (person.paid && person.method === 'rollover') {
+      const topUp = 15000 - (person.rolloverCents ?? 15000);
+      payment.append(node('div', moneyExact(topUp) + ' Venmo top-up confirmed', 'payment-date'));
+    }
     if(person.paidAt)payment.append(node('div','Marked '+date(person.paidAt),'payment-date'));
     payment.append(node('span',person.enrolled?'CHALLENGE: ENROLLED':person.paid?'READY TO ENROLL':'NOT ENROLLED','badge enrollment'+(person.enrolled?' paid':'')));
     if(person.enrolledAt)payment.append(node('div','Enrolled '+date(person.enrolledAt),'payment-date'));
@@ -60,7 +111,7 @@ function render(){
       try{
         const result=await api('/api/admin-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,paid:!person.paid,expectedVersion:person.paymentVersion,...(nextRound?{method,rolloverCents}:{})})});
         Object.assign(person,{method:result.payment.method,rolloverCents:result.payment.rolloverCents,paid:result.payment.paid,paidAt:result.payment.paidAt,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
-        render();message('#dashboard-status',person.paid?'Confirmed $150 '+(method==='rollover'?'rollover for ':'Venmo payment from ')+person.name+'.':'Payment mark removed for '+person.name+'. Challenge enrollment is also cleared.');
+        render();message('#dashboard-status',person.paid?'Confirmed the $150 stake for '+person.name+'.':'Payment mark removed for '+person.name+'. Challenge enrollment is also cleared.');
       }catch(error){message('#dashboard-status',error.message,true);for(const control of action.querySelectorAll('button'))control.disabled=false;row.classList.remove('pending');button.textContent=person.paid?'Undo payment mark':'Mark $150 received';}
     };
     button.addEventListener('click',()=>funding('venmo'));
