@@ -73,8 +73,9 @@
 .zine-site .launch-banner strong { font: 500 clamp(13px, 1.5vw, 18px)/1.6 var(--mono); }
 .zine-site .launch-banner a { font: 12px var(--mono); }
 .zine-site .hero-grid { gap: 8%; padding: 45px 0 60px; }
-.zine-site .hero h1 { font: 700 clamp(52px, 7.8vw, 106px)/1.04 'DM Sans', sans-serif; letter-spacing: -4px; }
+.zine-site .hero h1 { font: 700 clamp(36px, 4.7vw, 68px)/1.12 'DM Sans', sans-serif; letter-spacing: -2px; }
 .zine-site .hero h1 > span { font-family: var(--typewriter); font-weight: 400; background: var(--pink); color: var(--ink); padding: 5px 8px 0; margin: 12px 0 0; }
+.zine-site .hero .intro { max-width: 480px; color: var(--muted); }
 .zine-site .hero .button { margin-top: 32px; }
 .zine-site .poster { background: var(--sheet); border: 1px solid var(--ink); box-shadow: 6px 7px 0 var(--pink); transform: rotate(2deg); padding: 27px; }
 .zine-site .ticket-top { font: 11px/1.6 var(--mono); border-bottom: 1px dashed var(--line); }
@@ -87,6 +88,9 @@
 .zine-site .ticker { background: var(--ink); color: var(--sheet); font: 500 clamp(12px, 1.5vw, 18px)/1.7 var(--mono); }
 .zine-site .section { background: var(--paper); }
 .zine-site .section h2 { font: 700 clamp(32px, 4.3vw, 56px)/1.12 'DM Sans', sans-serif; letter-spacing: -1.8px; }
+.zine-site .rules .steps article { display: block; }
+.zine-site .rules .steps p { max-width: none; margin: 0; color: var(--ink); font-size: 20px; line-height: 1.5; }
+.zine-site .rules-note { margin: 28px 0 0; color: var(--muted); font-size: 13px; }
 .zine-site .steps h3 { font: 400 29px/1.2 var(--typewriter); }
 .zine-site .steps p, .zine-site .faq details p { color: var(--muted); }
 .zine-site .step-no { font: 12px var(--mono); }
@@ -163,7 +167,7 @@
   .zine-site .challenge-main, .zine-site .admin-main { padding: 32px 18px 55px; }
   .zine-site .account-panel, .zine-site .login-panel { padding: 27px 22px; }
   .zine-site .account-panel h1, .zine-site .login-panel h1 { font-size: clamp(29px, 7.5vw, 42px); line-height: 1.2; letter-spacing: -1.2px; }
-  .zine-site .hero h1 { font-size: clamp(49px, 12vw, 82px); letter-spacing: -2.5px; }
+  .zine-site .hero h1 { font-size: clamp(30px, 7.6vw, 52px); letter-spacing: -1.3px; }
   .zine-site .hero-grid { padding-top: 25px; gap: 48px; }
   .zine-site .poster { width: 88%; max-width: 400px; padding: 22px; }
   .zine-site .stake { font-size: 84px; letter-spacing: -4px; }
@@ -172,7 +176,10 @@
   .zine-site .ticket-line strong { font-size: 13px; }
   .zine-site .ticket-bottom svg { width: 75px; }
   .zine-site .section h2 { font-size: clamp(30px, 7vw, 43px); letter-spacing: -1px; }
-  .zine-site .steps h3 { font-size: 27px; }
+  .zine-site .rules .steps article { display: block; }
+.zine-site .rules .steps p { max-width: none; margin: 0; color: var(--ink); font-size: 20px; line-height: 1.5; }
+.zine-site .rules-note { margin: 28px 0 0; color: var(--muted); font-size: 13px; }
+.zine-site .steps h3 { font-size: 27px; }
   .zine-site .math strong { font-size: clamp(23px, 6vw, 33px); }
   .zine-site .manifesto > p { font-size: clamp(36px, 9vw, 60px); letter-spacing: -1px; }
   .zine-site .join h2 { font-size: clamp(36px, 9vw, 58px); letter-spacing: -1.5px; }
