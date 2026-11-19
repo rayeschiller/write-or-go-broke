@@ -86,7 +86,7 @@ function render() {
     const row=node('article',undefined,'person');row.setAttribute('role','listitem');
     const contact=node('div');contact.append(node('h2',person.name));const links=node('div',undefined,'contact');
     const email=node('a',person.email);email.href='mailto:'+person.email;
-    const tel=node('a',phone(person.phone));tel.href='tel:'+person.phone;links.append(email,tel);contact.append(links);
+    const tel=node('a',phone(person.phone));tel.href='tel:'+person.phone;links.append(email,tel);if(person.socialProfile){const social=node('a',person.socialProfile.includes('instagram.com/')?'Instagram ↗':'TikTok ↗');social.href=person.socialProfile;social.target='_blank';social.rel='noopener noreferrer';links.append(social);}contact.append(links);
     const joined=node('div');joined.append(node('span',person.source==='returning'?'EXTENSION REQUESTED':'SIGNED UP','row-label'),node('span',date(person.createdAt),'signup-date'));
     if (showExtensions) {
       joined.append(node('span', 'FOUNDING BALANCE', 'row-label'));
