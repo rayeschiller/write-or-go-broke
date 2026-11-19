@@ -1,3 +1,4 @@
+import {sendWelcomeForRequest} from '../lib/welcome.js';
 import {FOUNDING, NEXT} from '../lib/cohorts.js';
 import {authenticated,sameOrigin,json,body} from '../lib/admin-auth.js';
 import {getStore,PaymentConflict,SignupNotFound,PaymentRequired} from '../lib/store.js';
@@ -9,7 +10,7 @@ export default async function handler(req,res){
   const cohort=new URL(req.url||'/','https://'+req.headers.host).searchParams.get('cohort')??FOUNDING;
   if(cohort!==FOUNDING&&cohort!==NEXT)return json(res,400,{error:'Invalid cohort.'});
   if(!/^[a-f0-9]{64}$/.test(data.id||'') || typeof data.enrolled!=='boolean' || !(data.expectedVersion===null || (typeof data.expectedVersion==='string' && data.expectedVersion.length<=200)))return json(res,400,{error:'Invalid enrollment update.'});
-  try{return json(res,200,{ok:true,payment:await getStore().setEnrollment(data.id,data.enrolled,data.expectedVersion,cohort)});}
+  try{const payment=await getStore().setEnrollment(data.id,data.enrolled,data.expectedVersion,cohort);const welcome=payment.paid&&payment.enrolled?await sendWelcomeForRequest(req,data.id,cohort):{status:'skipped'};return json(res,200,{ok:true,payment,welcome});}
   catch(error){
     if(error instanceof PaymentRequired)return json(res,422,{error:'Mark the $150 payment received before enrolling this person.'});
     if(error instanceof PaymentConflict)return json(res,409,{error:'This signup was changed in another tab. Refresh and try again.'});

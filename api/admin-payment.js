@@ -1,3 +1,4 @@
+import {sendWelcomeForRequest} from '../lib/welcome.js';
 import {FOUNDING, NEXT} from '../lib/cohorts.js';
 import {authenticated,sameOrigin,json,body} from '../lib/admin-auth.js';
 import {getStore,PaymentConflict,SignupNotFound,PaymentRequired} from '../lib/store.js';
@@ -14,7 +15,7 @@ export default async function handler(req,res){
     (!Number.isInteger(data.rolloverCents)||data.rolloverCents<1||data.rolloverCents>15000)){
     return json(res,400,{error:'Enter a rollover amount between $0.01 and $150.'});
   }
-  try{return json(res,200,{ok:true,payment:await getStore().setPayment(data.id,data.paid,data.expectedVersion,cohort,data.method,data.rolloverCents)});}
+  try{const payment=await getStore().setPayment(data.id,data.paid,data.expectedVersion,cohort,data.method,data.rolloverCents);const welcome=payment.paid&&payment.enrolled?await sendWelcomeForRequest(req,data.id,cohort):{status:'skipped'};return json(res,200,{ok:true,payment,welcome});}
   catch(error){
     if(error instanceof PaymentRequired)return json(res,422,{error:'Only returning writers can roll over a stake.'});
     if(error instanceof PaymentConflict)return json(res,409,{error:'This payment was changed in another tab. Refresh and try again.'});

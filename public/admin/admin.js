@@ -41,6 +41,11 @@ async function api(path,options={},cohort=nextRound?'november-2026':'founding-co
   if(!response.ok)throw Error(data.error||'Could not complete that request. Try again.');
   return data;
 }
+function welcomeNotice(result){
+ if(result?.status==='sent')return ' Welcome email sent.';
+ if(result?.status==='already_sent')return ' Welcome email was already sent.';
+ return result?.message?' '+result.message:'';
+}
 function showLogin(){signups=[];$('#roster').replaceChildren();$('#dashboard').hidden=true;$('#login').hidden=false;$('#logout').hidden=true;}
 function matchesPaymentFilter(person) {
   if (filter === 'paid') return person.paid;
@@ -143,7 +148,7 @@ function render() {
       try{
         const result=await api('/api/admin-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,paid:!person.paid,expectedVersion:person.paymentVersion,...(nextRound?{method,rolloverCents}:{})})});
         Object.assign(person,{method:result.payment.method,rolloverCents:result.payment.rolloverCents,paid:result.payment.paid,paidAt:result.payment.paidAt,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
-        render();message('#dashboard-status',person.paid?'Confirmed the $150 stake for '+person.name+'.':'Payment mark removed for '+person.name+'. Challenge enrollment is also cleared.');
+        render();message('#dashboard-status',(person.paid?'Confirmed the $150 stake for '+person.name+'.':'Payment mark removed for '+person.name+'. Challenge enrollment is also cleared.')+welcomeNotice(result.welcome),['failed','review'].includes(result.welcome?.status));
       }catch(error){message('#dashboard-status',error.message,true);for(const control of action.querySelectorAll('button'))control.disabled=false;row.classList.remove('pending');button.textContent=person.paid?'Undo payment mark':'Mark $150 received';}
     };
     button.addEventListener('click',()=>funding('venmo'));
@@ -161,10 +166,19 @@ function render() {
         try{
           const result=await api('/api/admin-enrollment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id,enrolled:!person.enrolled,expectedVersion:person.paymentVersion})});
           Object.assign(person,{paid:result.payment.paid,enrolled:result.payment.enrolled,enrolledAt:result.payment.enrolledAt,cohortId:result.payment.cohortId,updatedAt:result.payment.updatedAt,paymentVersion:result.payment.paymentVersion});
-          render();message('#dashboard-status',person.enrolled?person.name+' is enrolled in this cohort.':'Challenge enrollment removed for '+person.name+'. Payment remains received.');
+          render();message('#dashboard-status',(person.enrolled?person.name+' is enrolled in this cohort.':'Challenge enrollment removed for '+person.name+'. Payment remains received.')+welcomeNotice(result.welcome),['failed','review'].includes(result.welcome?.status));
         }catch(error){render();message('#dashboard-status',error.message,true);}
       });
       action.prepend(enroll);
+    }
+    if(person.enrolled){
+      const welcome=node('button','Send / retry welcome email','payment-action invite');welcome.type='button';
+      welcome.addEventListener('click',async()=>{
+        welcome.disabled=true;
+        try{const result=await api('/api/admin-welcome',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:person.id})});message('#dashboard-status',welcomeNotice(result.welcome).trim()||'No welcome email was sent. Confirm payment and enrollment first.',['failed','review'].includes(result.welcome?.status));}
+        catch(error){message('#dashboard-status',error.message,true);}
+        finally{welcome.disabled=false;}
+      });action.append(welcome);
     }
     if(person.enrolled&&person.source!=='returning'){
       const invite=node('button','Create login / reset link','payment-action invite');invite.type='button';
