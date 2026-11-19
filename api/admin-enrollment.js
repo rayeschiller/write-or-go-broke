@@ -1,3 +1,4 @@
+import {FundingConflict} from '../lib/funding.js';
 import {sendWelcomeForRequest} from '../lib/welcome.js';
 import {FOUNDING, NEXT} from '../lib/cohorts.js';
 import {authenticated,sameOrigin,json,body} from '../lib/admin-auth.js';
@@ -12,6 +13,7 @@ export default async function handler(req,res){
   if(!/^[a-f0-9]{64}$/.test(data.id||'') || typeof data.enrolled!=='boolean' || !(data.expectedVersion===null || (typeof data.expectedVersion==='string' && data.expectedVersion.length<=200)))return json(res,400,{error:'Invalid enrollment update.'});
   try{const payment=await getStore().setEnrollment(data.id,data.enrolled,data.expectedVersion,cohort);const welcome=payment.paid&&payment.enrolled?await sendWelcomeForRequest(req,data.id,cohort):{status:'skipped'};return json(res,200,{ok:true,payment,welcome});}
   catch(error){
+    if(error instanceof FundingConflict)return json(res,409,{error:error.message});
     if(error instanceof PaymentRequired)return json(res,422,{error:'Mark the $150 payment received before enrolling this person.'});
     if(error instanceof PaymentConflict)return json(res,409,{error:'This signup was changed in another tab. Refresh and try again.'});
     if(error instanceof SignupNotFound)return json(res,404,{error:'This signup no longer exists.'});

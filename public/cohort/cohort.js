@@ -106,12 +106,14 @@ function renderQuote(){
  const {next,quote}=renewal;
  $('#rollover-quote').hidden=!quote;
  if(!quote)return;
- const useBalance=next.requested?next.rollover:$('#rollover').checked;
- $('#quote-heading').textContent=quote.estimated?'Estimated payment and payout':'Payment and payout';
+ const useBalance=!quote.paidBack&&(next.requested?next.rollover:$('#rollover').checked);
+ $('#rollover').disabled=quote.paidBack;
+ if(quote.paidBack)$('#rollover').checked=false;
+ $('#quote-heading').textContent=quote.paidBack?'Founding balance paid back · Start fresh':quote.estimated?'Estimated payment and payout':'Payment and payout';
  $('#quote-balance').textContent=money(quote.balanceCents);
  $('#quote-credit').textContent=money(useBalance?quote.rolloverCents:0);
  $('#quote-owed').textContent=money(useBalance?quote.owedCents:quote.stakeCents);
- $('#quote-payout').textContent=money(useBalance?quote.payoutCents:quote.balanceCents);
+ $('#quote-payout').textContent=money(useBalance?quote.payoutCents:(quote.availableCents??quote.balanceCents));
 }
 
 function renderRenewal(){
@@ -122,7 +124,7 @@ function renderRenewal(){
  $('#join-next').hidden=!canSubmit;
  $('#renewal-status').textContent=next.enrolled?'You’re enrolled in the November cohort.':
   next.paid?'Raye confirmed your stake. Enrollment is pending.':
-  next.requested?(next.rollover?'Rollover requested. Raye will confirm your final balance and any Venmo top-up.':'Enrollment requested. Send $150 on Venmo to @Raye-Schiller.'):
+  next.requested?(next.paidBack?'Your founding balance was paid back. Send a fresh $150 on Venmo to @Raye-Schiller to re-enroll.':next.rollover?'Rollover requested. Raye will confirm your final balance and any Venmo top-up.':'Enrollment requested. Send $150 on Venmo to @Raye-Schiller.'):
   next.canJoin?'Choose how to fund your November stake.':'November enrollment is closed.';
  renderQuote();
 }

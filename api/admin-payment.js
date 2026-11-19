@@ -1,3 +1,4 @@
+import {FundingConflict} from '../lib/funding.js';
 import {sendWelcomeForRequest} from '../lib/welcome.js';
 import {FOUNDING, NEXT} from '../lib/cohorts.js';
 import {authenticated,sameOrigin,json,body} from '../lib/admin-auth.js';
@@ -17,6 +18,7 @@ export default async function handler(req,res){
   }
   try{const payment=await getStore().setPayment(data.id,data.paid,data.expectedVersion,cohort,data.method,data.rolloverCents);const welcome=payment.paid&&payment.enrolled?await sendWelcomeForRequest(req,data.id,cohort):{status:'skipped'};return json(res,200,{ok:true,payment,welcome});}
   catch(error){
+    if(error instanceof FundingConflict)return json(res,409,{error:error.message});
     if(error instanceof PaymentRequired)return json(res,422,{error:'Only returning writers can roll over a stake.'});
     if(error instanceof PaymentConflict)return json(res,409,{error:'This payment was changed in another tab. Refresh and try again.'});
     if(error instanceof SignupNotFound)return json(res,404,{error:'This signup no longer exists.'});
