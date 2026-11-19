@@ -103,3 +103,8 @@ test('stale returning linkage cannot create an invitation',async()=>{
 test('staging does not send real welcome emails',async()=>{
  const result=await sendWelcomeForRequest({headers:{host:'write-or-go-broke-staging.vercel.app'}},id,NEXT);assert.equal(result.status,'skipped');
 });
+
+import {welcomeTestEmail} from '../lib/welcome-email.js';
+test('welcome preview uses the same design without creating a private credential',()=>{
+ const preview=welcomeTestEmail();assert.equal(preview.subject,'[Test] Welcome to the cohort');assert.match(preview.html,/Set up your account/);assert.match(preview.text,/Test preview only/);assert.doesNotMatch(preview.html,/#setup=|&token=/);
+});
