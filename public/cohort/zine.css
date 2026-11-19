@@ -110,7 +110,7 @@ tbody td:nth-child(2) { text-align: left; }
 .post-head { border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 18px; }
 .post-head strong { font-size: 12px; }
 .post-head > div > span { color: var(--muted); font: 11px/1.5 var(--mono); }
-.post-text { font: 400 16px/1.85 var(--typewriter); color: var(--ink); }
+.post-text { font: 400 16px/1.85 'DM Sans', Arial, sans-serif; color: var(--ink); }
 .post-text.is-collapsed { max-height: 11.1em; }
 .draft-tag { background: var(--lavender); color: var(--ink); border-radius: 2px; font-size: 11px; padding: 6px 8px; display: inline-block; }
 .post-image { background: var(--paper); border-color: var(--line); border-radius: 2px; }
@@ -138,7 +138,7 @@ dialog h2 { font: 700 35px/1.2 'DM Sans', sans-serif; letter-spacing: -1.3px; ma
 .attachment-tabs button { flex: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--ink); min-height: 44px; padding: 10px 0; font: 12px/1.5 var(--mono); }
 .attachment-tabs button[aria-pressed=true] { background: none; color: var(--ink); border-bottom-color: var(--ink); }
 .field-label, .field-label small { font: 11px/1.5 var(--mono); letter-spacing: 0; }
-#draft { background: repeating-linear-gradient(transparent, transparent 28px, var(--grid) 28px, var(--grid) 29px), var(--paper); border-color: var(--line); border-radius: 2px; font: 16px/1.85 var(--typewriter); min-height: 230px; }
+#draft { background: repeating-linear-gradient(transparent, transparent 28px, var(--grid) 28px, var(--grid) 29px), var(--paper); border-color: var(--line); border-radius: 2px; font: 16px/1.85 'DM Sans', Arial, sans-serif; min-height: 230px; }
 input[type=file] { background: var(--paper); border-color: var(--line); border-radius: 2px; }
 #selected-photo { border-radius: 2px; }
 .balance-line { border-bottom: 1px dashed var(--line); font: 13px/1.6 var(--mono); gap: 16px; }
