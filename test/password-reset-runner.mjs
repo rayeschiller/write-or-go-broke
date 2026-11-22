@@ -71,6 +71,8 @@ assert.equal(known.headers['Set-Cookie'],undefined);
 await Promise.all(background);
 assert.deepEqual(messages.map(message=>message.to),[[email]]);
 const resetUrl=new URL(messages[0].text.match(/https:\/\/[^\s]+/)[0]);
+const htmlLink=messages[0].html.match(/href="([^"]+)"[^>]*>RESET PASSWORD</)?.[1];
+assert.equal(htmlLink?.replaceAll('&amp;','&'),resetUrl.href);
 assert.equal(resetUrl.origin,'https://write.rayeschiller.com');
 assert.equal(resetUrl.searchParams.get('cohort'),NEXT);
 const fragment=new URLSearchParams(resetUrl.hash.slice(1));

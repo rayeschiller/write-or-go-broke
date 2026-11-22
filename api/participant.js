@@ -1,6 +1,7 @@
 import {FOUNDING,NEXT,nextQuery} from '../lib/cohorts.js';
 import {waitUntil} from '@vercel/functions';
 import {deliverEmail} from '../lib/reminders.js';
+import {passwordResetEmail} from '../lib/password-reset-email.js';
 import {joinNext,nextStatus,personInCohort,rolloverQuote} from '../lib/next-cohort.js';
 import {adminCheckins,editCheckin} from '../lib/admin-checkins.js';
 import {community,savePreferences,adminFinances,recordPayout,editWriting} from '../lib/community-store.js';
@@ -17,8 +18,7 @@ async function sendPasswordReset(email,cohort){
     const url='https://write.rayeschiller.com/challenge'+(cohort===NEXT?nextQuery:'')+'#reset='+reset.id+'&token='+reset.token;
     await deliverEmail({
       from:process.env.REMINDER_FROM,to:[reset.email],reply_to:process.env.REMINDER_REPLY_TO||undefined,
-      subject:'Reset your Write or Go Broke password',
-      text:'Use this link to choose a new password for Write or Go Broke:\n\n'+url+'\n\nThe link expires in one hour and works once. If you didn’t request it, you can ignore this email.',
+      ...passwordResetEmail(url),
     },'participant-reset/'+digest(reset.token));
   }catch(error){
     console.error('Password reset delivery failed:',{name:error.name,status:error.providerStatus});
