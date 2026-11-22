@@ -1,15 +1,54 @@
 const $=s=>document.querySelector(s);let model=null,busy=false;
 const nextQuery='?cohort=november-2026';
 const nextRound=new URLSearchParams(location.search).get('cohort')==='november-2026';
-const params=new URLSearchParams(location.hash.slice(1));let setup=params.get('setup'),access=params.get('token');
-if(setup||access)history.replaceState(null,'',location.pathname+location.search);
+const params=new URLSearchParams(location.hash.slice(1));
+let reset=params.has('reset'),linkId=params.get(reset?'reset':'setup'),access=params.get('token');
+if(linkId||access||reset)history.replaceState(null,'',location.pathname+location.search);
 function message(selector,text,error=false){const e=$(selector);e.textContent=text;e.className=text?(error?'error':'notice'):'';}
 async function api(data){
  const r=await fetch('/api/participant'+(nextRound?nextQuery:''),{...(data?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}:{}),credentials:'same-origin',cache:'no-store'});
  let result;try{result=await r.json();}catch{throw Error('Could not connect. Please refresh and try again.');}
  if(!r.ok){const e=Error(result.error||'Could not complete the request.');e.status=r.status;throw e;}return result;
 }
-function loginView(){if(!setup){$('#identifier-field').hidden=false;$('#identifier').required=true;$('#confirm-field').hidden=true;$('#confirm-password').required=false;$('#login-title').innerHTML='Your writing<br><em class="zine-highlight">era awaits.</em>';$('#login-intro').textContent='Use the email or phone number from your signup and your password.';$('#password-label').textContent='PASSWORD';$('#password').autocomplete='current-password';$('#login-button').textContent='LET’S WRITE ↗';$('#setup-help').textContent='First time here or forgot your password? Ask Raye for your private setup link.';}model=null;$('#next-panel').hidden=true;$('#challenge-panel').hidden=true;$('#login-panel').hidden=false;$('#logout').hidden=true;$('#calendar').replaceChildren();}
+const setupHelp=$('#setup-help').textContent;
+function loginView(){
+ $('#reset-panel').hidden=true;
+ $('#identifier-field').hidden=false;$('#identifier').required=true;
+ $('#confirm-field').hidden=true;$('#confirm-password').required=false;
+ $('#login-title').innerHTML='Your writing<br><em class="zine-highlight">era awaits.</em>';
+ $('#login-intro').textContent='Use the email or phone number from your signup and your password.';
+ $('#password-label').textContent='PASSWORD';$('#password').autocomplete='current-password';
+ $('#login-button').textContent='LET’S WRITE ↗';$('#forgot-password').hidden=false;
+ $('#forgot-password').textContent='Forgot password?';
+ $('#setup-help').textContent=setupHelp;
+ model=null;$('#next-panel').hidden=true;$('#challenge-panel').hidden=true;$('#login-panel').hidden=false;$('#logout').hidden=true;$('#calendar').replaceChildren();
+}
+function showResetRequest(){
+ if(busy)return;
+ const identifier=$('#identifier').value.trim();
+ linkId=access=null;reset=false;
+ $('#password').value='';$('#confirm-password').value='';
+ message('#login-status','');message('#reset-status','');
+ $('#login-panel').hidden=true;$('#reset-panel').hidden=false;
+ if(identifier.includes('@'))$('#reset-email').value=identifier;
+ $('#reset-email').focus();
+}
+$('#forgot-password').addEventListener('click',showResetRequest);
+$('#back-to-login').addEventListener('click',()=>{
+ loginView();
+ $('#forgot-password').focus();
+});
+$('#reset-form').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const form=event.currentTarget,button=form.querySelector('button');
+ button.disabled=true;$('#back-to-login').disabled=true;
+ message('#reset-status','Sending request…');
+ try{
+  await api({action:'request-password-reset',email:$('#reset-email').value});
+  message('#reset-status','If an account matches that email, a reset link is on its way. Check your inbox and spam folder.');
+ }catch(error){message('#reset-status',error.message,true);}
+ finally{button.disabled=false;$('#back-to-login').disabled=false;}
+});
 function dayLabel(value){const [year,month,day]=value.split('-');return new Date(Date.UTC(+year,+month-1,+day)).toLocaleDateString(undefined,{month:'short',day:'numeric',timeZone:'UTC'});}
 function renderNext(){
  const next=model.next;
@@ -51,13 +90,13 @@ function render(){
   const status=document.createElement('span');status.textContent=state==='done'?'WRITING SAVED':state==='today'?'TODAY':state==='missed'?'NO CHECK-IN':'UPCOMING';cell.append(label,when,status);calendar.append(cell);
  }
 }
-async function refresh(){try{model=await api();render();}catch(e){if(e.status===401)loginView();else message(model?'#checkin-status':'#login-status',e.message,true);}}
+async function refresh(){try{model=await api();if($('#reset-panel').hidden)render();}catch(e){if(!$('#reset-panel').hidden)return;if(e.status===401)loginView();else message(model?'#checkin-status':'#login-status',e.message,true);}}
 $('#login-form').addEventListener('submit',async event=>{
  event.preventDefault();if(busy)return;
  const password=$('#password').value;
- if(setup&&password!==$('#confirm-password').value){message('#login-status','Passwords do not match.',true);return;}
- busy=true;$('#login-button').disabled=true;message('#login-status','Signing in…');
- try{await api(setup?{action:'activate',id:setup,token:access,password}:{action:'login',identifier:$('#identifier').value,password});setup=access=null;$('#password').value='';$('#confirm-password').value='';message('#login-status','');await refresh();}
+ if(linkId&&password!==$('#confirm-password').value){message('#login-status','Passwords do not match.',true);return;}
+ busy=true;$('#login-button').disabled=true;message('#login-status',reset?'Saving your new password…':'Signing in…');
+ try{await api(linkId?{action:reset?'reset-password':'activate',id:linkId,token:access,password}:{action:'login',identifier:$('#identifier').value,password});linkId=access=null;reset=false;$('#password').value='';$('#confirm-password').value='';message('#login-status','');await refresh();}
  catch(e){message('#login-status',e.message,true);}finally{busy=false;$('#login-button').disabled=false;}
 });
 $('#checkin-form').addEventListener('submit',async event=>{
@@ -67,5 +106,14 @@ $('#checkin-form').addEventListener('submit',async event=>{
 });
 $('#logout').addEventListener('click',async()=>{try{await api({action:'logout'});loginView();message('#login-status','Signed out.');}catch(e){message('#checkin-status',e.message,true);}});
 $('#refresh').addEventListener('click',refresh);
-if(setup&&access){$('#login-title').textContent='YOUR ACCOUNT. YOUR COMMITMENT.';$('#login-intro').textContent='Your private link connects this account to your existing signup. Create a password, then log in with either signup email or phone.';$('#identifier-field').hidden=true;$('#identifier').required=false;$('#password').autocomplete='new-password';$('#password-label').textContent='CREATE PASSWORD (10+ CHARACTERS)';$('#confirm-field').hidden=false;$('#confirm-password').required=true;$('#login-button').textContent='CREATE MY LOGIN ↗';$('#setup-help').textContent='This setup link expires after 72 hours and can be used once.';}
-else refresh();
+if(linkId&&access){
+ $('#login-title').textContent=reset?'Choose a new password.':'YOUR ACCOUNT. YOUR COMMITMENT.';
+ $('#login-intro').textContent=reset?'Use at least 10 characters. You’ll be signed in after you save.':'Your private link connects this account to your existing signup. Create a password, then log in with either signup email or phone.';
+ $('#identifier-field').hidden=true;$('#identifier').required=false;
+ $('#password').autocomplete='new-password';$('#password-label').textContent=reset?'NEW PASSWORD':'CREATE PASSWORD (10+ CHARACTERS)';
+ $('#confirm-field').hidden=false;$('#confirm-password').required=true;
+ $('#login-button').textContent=reset?'SAVE NEW PASSWORD':'CREATE MY LOGIN ↗';
+ $('#forgot-password').hidden=!reset;$('#forgot-password').textContent=reset?'Request a new reset link':'Forgot password?';
+ $('#setup-help').textContent=reset?'This link expires after one hour and can be used once.':'This setup link expires after 72 hours and can be used once.';
+}else if(reset)showResetRequest();
+else{linkId=access=null;refresh();}

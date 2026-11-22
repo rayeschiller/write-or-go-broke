@@ -60,6 +60,11 @@ Sessions are Secure/HttpOnly/SameSite cookies, independently signed with the
 PARTICIPANT_SESSION_SECRET environment variable. Resetting the password revokes
 old sessions; account access is tied to the signup creation timestamp.
 
+Returning participants can use **Forgot password?** on /challenge to request a
+one-hour, single-use link at their signup email. Delivery uses the production
+Resend configuration (`RESEND_API_KEY`, `REMINDER_FROM`, optional
+`REMINDER_REPLY_TO`). First-time account setup still uses the enrollment link.
+
 Login attempts are limited by IP and contact. Shared phone numbers must use email.
 Participants can see only their own writing record. Check-ins require current paid
 enrollment and a server-confirmed active challenge date. The server derives today's
