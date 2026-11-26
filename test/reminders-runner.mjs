@@ -41,7 +41,7 @@ globalThis.fetch=async(url,options)=>{
 };
 process.env.RESEND_API_KEY='test-only';process.env.REMINDER_FROM='writer@example.invalid';
 const {runReminders,runCohortReminders,reminderIdentity,reminderWindow}=await import('../lib/reminders.js');
-const morning=new Date('2026-11-24T17:00:00Z'),evening=new Date('2026-11-25T05:00:00Z');
+const morning=new Date('2026-11-24T17:00:00Z'),evening=new Date('2026-11-25T03:00:00Z');
 const dry=await runReminders({now:morning,dryRun:true});
 assert.equal(dry.ok,true);assert.equal(dry.cohorts[0].phase,'ended');assert.equal(dry.cohorts[1].eligible,2);
 assert.equal(messages.length,0);assert.equal(written.length,0);
